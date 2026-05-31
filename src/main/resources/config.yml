@@ -1,0 +1,85 @@
+# # # # # # # # # # # # # # # # # # # # #
+#        POSSUM's WELCOME ITEMS         #
+#             by RatzBonez              #
+# # # # # # # # # # # # # # # # # # # # #
+
+# # # # # # # # FEATURES  # # # # # # # #
+
+# Gives players configurable welcome items on their first join.
+# Supports 9 welcome item slots, matching hotbar slots 1 through 9.
+# Operator commands can set, remove, list, get, enable, disable, and reload the welcome items.
+# Custom written books are supported through the book section below.
+
+# # # # # # # # CONFIGURATIONS # # # # # #
+
+# Enable or disable the plugin.
+enabled: true
+
+# Each number matches a player hotbar slot:
+# 1 = first hotbar slot, 2 = second hotbar slot, etc.
+# Supports color codes and copy/paste text.
+
+slots:
+  # Each number matches a player hotbar slot:
+  # 1 = first hotbar slot, 2 = second hotbar slot, etc.
+  "1":
+    # the Minecraft item/block ID.
+    # https://www.mcworldtools.com/tools/id-list
+    item: WRITTEN_BOOK
+
+    # The amount to give to the player.
+    amount: 1
+
+    # The small text shown under an item name when hovering over it.
+    hoverText:
+      - "To help you get started!"
+
+    # Supplemental insert for books.
+    book:
+      # Title of the book.
+      title: "Welcome to Moonshire!"
+      # Author of the book.
+      author: "Possum"
+      # The contents of each page of the book.
+      pages:
+        - "Hello World!"
+
+  "2":
+    item: ""
+    amount: 1
+    hoverText: []
+
+  "3":
+    item: ""
+    amount: 1
+    hoverText: []
+
+  "4":
+    item: ""
+    amount: 1
+    hoverText: []
+
+  "5":
+    item: ""
+    amount: 1
+    hoverText: []
+
+  "6":
+    item: ""
+    amount: 1
+    hoverText: []
+
+  "7":
+    item: ""
+    amount: 1
+    hoverText: []
+
+  "8":
+    item: ""
+    amount: 1
+    hoverText: []
+
+  "9":
+    item: ""
+    amount: 1
+    hoverText: []

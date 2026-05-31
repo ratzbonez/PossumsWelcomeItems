@@ -1,0 +1,18 @@
+name: PossumsWelcomeItems
+version: 26.1.0
+main: main.java.possumswelcomeitems.PossumsWelcomeItems
+api-version: "1.21"
+author: RatzBonez
+description: Configurable first-join welcome items for Moonshire.
+
+commands:
+  welcomeitems:
+    description: Manage PossumsWelcomeItems.
+    usage: /welcomeitems <enable|disable|status|reload|list|get|set|remove>
+    permission: possumswelcomeitems.admin
+    permission-message: "You do not have permission to use this command."
+
+permissions:
+  possumswelcomeitems.admin:
+    description: Allows use of /welcomeitems.
+    default: op
