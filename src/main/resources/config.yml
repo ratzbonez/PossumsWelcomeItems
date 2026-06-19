@@ -20,11 +20,7 @@ enabled: true
 # Supports color codes and copy/paste text.
 
 slots:
-  # Each number matches a player hotbar slot:
-  # 1 = first hotbar slot, 2 = second hotbar slot, etc.
   "1":
-    # the Minecraft item/block ID.
-    # https://www.mcworldtools.com/tools/id-list
     item: WRITTEN_BOOK
 
     # The amount to give to the player.

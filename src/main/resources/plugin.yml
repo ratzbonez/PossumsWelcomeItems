@@ -1,9 +1,11 @@
 name: PossumsWelcomeItems
-version: 26.1.0
+version: 26.1.1
 main: main.java.possumswelcomeitems.PossumsWelcomeItems
 api-version: "1.21"
 author: RatzBonez
 description: Configurable first-join welcome items for Moonshire.
+softdepend:
+  - ImageFrame
 
 commands:
   welcomeitems:

@@ -21,6 +21,8 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 public final class PossumsWelcomeItems extends JavaPlugin implements Listener, TabExecutor {
 
@@ -36,6 +38,20 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
     // One welcome slot for each hotbar slot
     private static final int FIRST_WELCOME_SLOT = 1;
     private static final int LAST_WELCOME_SLOT = 9;
+
+    // This stores the exact ItemStack saved from a player's hand.
+    // It preserves custom plugin data much better than rebuilding only
+    // material/lore/book data.
+    private static final String EXACT_ITEM_KEY = ".exact-item";
+
+    // Supports config text like <#4A90E2>A Guide To Moonshire</#98AFD6>.
+    private static final Pattern HEX_GRADIENT_PATTERN = Pattern.compile(
+            "(?i)<#([0-9a-f]{6})>(.*?)</#([0-9a-f]{6})>",
+            Pattern.DOTALL);
+
+    // Also supports solid hex text like <#4A90E2> and &#4A90E2.
+    private static final Pattern HEX_TAG_PATTERN = Pattern.compile("(?i)<#([0-9a-f]{6})>");
+    private static final Pattern AMP_HEX_PATTERN = Pattern.compile("(?i)&\\#([0-9a-f]{6})");
 
     // Command options, for tab completion
     private static final List<String> COMMAND_OPTIONS = List.of(
@@ -74,7 +90,8 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
         getServer().getPluginManager().registerEvents(this, this);
         registerCommand();
 
-        getLogger().info("PossumsWelcomeItems enabled. Welcome items: " + statusText(enabled));
+        getLogger().info(
+                "PossumsWelcomeItems enabled. Welcome items: " + ChatColor.stripColor(colorize(statusText(enabled))));
     }
 
     private void registerCommand() {
@@ -117,7 +134,7 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
         giveWelcomeItems(player, false);
     }
 
-    // Actual item giving logic
+    // Actual item giving logic.
     private void giveWelcomeItems(Player player, boolean manualCommand) {
         if (welcomeItems.isEmpty()) {
             sendManualOnlyMessage(player, manualCommand, "&cNo welcome items are configured.");
@@ -141,7 +158,7 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
         sendManualOnlyMessage(player, manualCommand, "&aWelcome items given.");
     }
 
-    // Only show feedback if an actual command is entered
+    // Only show feedback if an actual command is entered.
     private void sendManualOnlyMessage(Player player, boolean manualCommand, String message) {
         if (manualCommand) {
             player.sendMessage(colorize(PREFIX + " " + message));
@@ -161,7 +178,7 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
         inventory.addItem(item);
     }
 
-    // First check whether an inventory has space
+    // First check whether an inventory has space.
     private boolean hasEnoughOpenInventorySlots(Player player, int neededSlots) {
         int openSlots = 0;
 
@@ -178,14 +195,15 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
         return false;
     }
 
-    // index handling
-    private int inventoryIndexForWelcomeSlot(int welcomeSlot) {
-        return welcomeSlot - 1;
-    }
-
-    // Read a single item from config.yml
+    // Read a single item from config.yml.
     private ItemStack readConfiguredItem(int slot) {
         String path = slotPath(slot);
+
+        ItemStack exactItem = readExactItem(path);
+        if (!isEmptyItem(exactItem)) {
+            return exactItem;
+        }
+
         Material material = readConfiguredMaterial(path, slot);
 
         if (material == null)
@@ -198,7 +216,18 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
         return item;
     }
 
-    // Read a respective material for an item slot
+    // Read a saved ItemStack snapshot from config.yml.
+    private ItemStack readExactItem(String path) {
+        ItemStack exactItem = getConfig().getItemStack(path + EXACT_ITEM_KEY);
+
+        if (isEmptyItem(exactItem)) {
+            return null;
+        }
+
+        return exactItem.clone();
+    }
+
+    // Read a respective material for an item slot.
     private Material readConfiguredMaterial(String path, int slot) {
         String rawItem = getConfig().getString(path + ".item", "");
 
@@ -216,20 +245,30 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
         return material;
     }
 
-    // Apply optional book data from config.yml
+    // Apply optional book data from config.yml.
     private void applyItemMeta(ItemStack item, String path) {
         ItemMeta meta = item.getItemMeta();
 
         if (meta == null)
             return;
 
+        applyDisplayNameMeta(meta, path);
         applyHoverTextMeta(meta, path);
         applyBookMeta(meta, path);
 
         item.setItemMeta(meta);
     }
 
-    // Add optional hover-text from config
+    // Add optional item display name from config.
+    private void applyDisplayNameMeta(ItemMeta meta, String path) {
+        String name = getConfig().getString(path + ".name", "");
+
+        if (!isBlank(name)) {
+            meta.setDisplayName(colorize(name));
+        }
+    }
+
+    // Add optional hover-text from config.
     private void applyHoverTextMeta(ItemMeta meta, String path) {
         List<String> hoverText = getConfig().getStringList(path + ".hoverText");
 
@@ -238,7 +277,7 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
         }
     }
 
-    // Author, title, pages
+    // Author, title, pages.
     private void applyBookMeta(ItemMeta meta, String path) {
         if (!(meta instanceof BookMeta bookMeta))
             return;
@@ -271,73 +310,23 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
         return coloredLines;
     }
 
-    // Save the held item to a slot.
+    // Save the held item to a slot as an exact ItemStack snapshot.
     private void saveItemToConfig(int slot, ItemStack item) {
         String path = slotPath(slot);
 
-        saveBaseItemToConfig(path, item);
-        saveMetaToConfig(path, item.getItemMeta());
-        saveAndReloadSettings();
-    }
-
-    // Item type and amount
-    private void saveBaseItemToConfig(String path, ItemStack item) {
         getConfig().set(path + ".item", item.getType().name());
         getConfig().set(path + ".amount", item.getAmount());
-    }
+        getConfig().set(path + EXACT_ITEM_KEY, item.clone());
 
-    // Optional item details
-    private void saveMetaToConfig(String path, ItemMeta meta) {
-        if (meta == null) {
-            getConfig().set(path + ".hoverText", List.of());
-            getConfig().set(path + ".book", null);
-            return;
-        }
-
-        saveHoverTextToConfig(path, meta);
-        saveBookMetaToConfig(path, meta);
-    }
-
-    // Save hover text into config.
-    private void saveHoverTextToConfig(String path, ItemMeta meta) {
-        if (!meta.hasLore() || meta.getLore() == null) {
-            getConfig().set(path + ".hoverText", List.of());
-            return;
-        }
-
-        List<String> hoverText = new ArrayList<>();
-
-        for (String line : meta.getLore()) {
-            hoverText.add(uncolorize(line));
-        }
-
-        getConfig().set(path + ".hoverText", hoverText);
-    }
-
-    // For books, save written book fields.
-    private void saveBookMetaToConfig(String path, ItemMeta meta) {
+        // These older readable sections are only used by hand-written config slots.
+        // Clear them when a command saves an exact item so they cannot override custom
+        // data.
+        getConfig().set(path + ".name", null);
+        getConfig().set(path + ".hoverText", List.of());
         getConfig().set(path + ".book", null);
+        getConfig().set(path + ".imageframe", null);
 
-        if (!(meta instanceof BookMeta bookMeta))
-            return;
-
-        if (bookMeta.hasTitle()) {
-            getConfig().set(path + ".book.title", uncolorize(bookMeta.getTitle()));
-        }
-
-        if (bookMeta.hasAuthor()) {
-            getConfig().set(path + ".book.author", uncolorize(bookMeta.getAuthor()));
-        }
-
-        if (bookMeta.getPageCount() > 0) {
-            List<String> pages = new ArrayList<>();
-
-            for (String page : bookMeta.getPages()) {
-                pages.add(uncolorize(page));
-            }
-
-            getConfig().set(path + ".book.pages", pages);
-        }
+        saveAndReloadSettings();
     }
 
     // Remove an item from the loadout.
@@ -346,8 +335,11 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
 
         getConfig().set(path + ".item", "");
         getConfig().set(path + ".amount", 1);
+        getConfig().set(path + EXACT_ITEM_KEY, null);
+        getConfig().set(path + ".name", null);
         getConfig().set(path + ".hoverText", List.of());
         getConfig().set(path + ".book", null);
+        getConfig().set(path + ".imageframe", null);
 
         saveAndReloadSettings();
     }
@@ -407,6 +399,10 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
 
         ItemMeta meta = item.getItemMeta();
 
+        if (meta != null && meta.hasDisplayName()) {
+            return prettyMaterialName(item.getType()) + " - " + ChatColor.stripColor(meta.getDisplayName());
+        }
+
         if (meta instanceof BookMeta bookMeta && bookMeta.hasTitle()) {
             return prettyMaterialName(item.getType()) + " - " + ChatColor.stripColor(bookMeta.getTitle());
         }
@@ -434,14 +430,140 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
         if (message == null)
             return "";
 
-        return ChatColor.translateAlternateColorCodes('&', message);
+        String withGradients = applyHexGradients(message);
+        String withSolidHex = applySolidHexColors(withGradients);
+        return ChatColor.translateAlternateColorCodes('&', withSolidHex);
     }
 
-    private String uncolorize(String message) {
-        if (message == null)
-            return "";
+    private String applyHexGradients(String message) {
+        Matcher matcher = HEX_GRADIENT_PATTERN.matcher(message);
+        StringBuffer output = new StringBuffer();
 
-        return message.replace(ChatColor.COLOR_CHAR, '&');
+        while (matcher.find()) {
+            String replacement = createGradientText(
+                    matcher.group(2),
+                    matcher.group(1),
+                    matcher.group(3));
+
+            matcher.appendReplacement(output, Matcher.quoteReplacement(replacement));
+        }
+
+        matcher.appendTail(output);
+        return output.toString();
+    }
+
+    private String applySolidHexColors(String message) {
+        String tagConverted = replaceHexPattern(message, HEX_TAG_PATTERN);
+        return replaceHexPattern(tagConverted, AMP_HEX_PATTERN);
+    }
+
+    private String replaceHexPattern(String message, Pattern pattern) {
+        Matcher matcher = pattern.matcher(message);
+        StringBuffer output = new StringBuffer();
+
+        while (matcher.find()) {
+            matcher.appendReplacement(output, Matcher.quoteReplacement(toLegacyHexColor(matcher.group(1))));
+        }
+
+        matcher.appendTail(output);
+        return output.toString();
+    }
+
+    private String createGradientText(String text, String startHex, String endHex) {
+        int visibleCharacters = countVisibleCodePoints(text);
+
+        if (visibleCharacters <= 0) {
+            return text;
+        }
+
+        int[] start = parseHexColor(startHex);
+        int[] end = parseHexColor(endHex);
+        StringBuilder output = new StringBuilder();
+        int visibleIndex = 0;
+
+        for (int index = 0; index < text.length();) {
+            char current = text.charAt(index);
+
+            if (isLegacyColorCode(text, index)) {
+                output.append(current).append(text.charAt(index + 1));
+                index += 2;
+                continue;
+            }
+
+            int codePoint = text.codePointAt(index);
+            double ratio = visibleCharacters == 1 ? 0.0D : (double) visibleIndex / (visibleCharacters - 1);
+            String hex = interpolateHex(start, end, ratio);
+
+            output.append(toLegacyHexColor(hex));
+            output.appendCodePoint(codePoint);
+
+            visibleIndex++;
+            index += Character.charCount(codePoint);
+        }
+
+        return output.toString();
+    }
+
+    private int countVisibleCodePoints(String text) {
+        int count = 0;
+
+        for (int index = 0; index < text.length();) {
+            if (isLegacyColorCode(text, index)) {
+                index += 2;
+                continue;
+            }
+
+            int codePoint = text.codePointAt(index);
+            count++;
+            index += Character.charCount(codePoint);
+        }
+
+        return count;
+    }
+
+    private boolean isLegacyColorCode(String text, int index) {
+        if (index + 1 >= text.length()) {
+            return false;
+        }
+
+        char marker = text.charAt(index);
+        char code = Character.toLowerCase(text.charAt(index + 1));
+
+        return (marker == '&' || marker == ChatColor.COLOR_CHAR)
+                && "0123456789abcdefklmnorx".indexOf(code) >= 0;
+    }
+
+    private int[] parseHexColor(String hex) {
+        return new int[] {
+                Integer.parseInt(hex.substring(0, 2), 16),
+                Integer.parseInt(hex.substring(2, 4), 16),
+                Integer.parseInt(hex.substring(4, 6), 16)
+        };
+    }
+
+    private String interpolateHex(int[] start, int[] end, double ratio) {
+        int red = interpolateColorChannel(start[0], end[0], ratio);
+        int green = interpolateColorChannel(start[1], end[1], ratio);
+        int blue = interpolateColorChannel(start[2], end[2], ratio);
+
+        return String.format("%02X%02X%02X", red, green, blue);
+    }
+
+    private int interpolateColorChannel(int start, int end, double ratio) {
+        return (int) Math.round(start + ((end - start) * ratio));
+    }
+
+    private String toLegacyHexColor(String hex) {
+        String cleanHex = hex.toUpperCase(Locale.ROOT);
+        StringBuilder output = new StringBuilder();
+
+        output.append(ChatColor.COLOR_CHAR).append('x');
+
+        for (char digit : cleanHex.toCharArray()) {
+            output.append(ChatColor.COLOR_CHAR).append(digit);
+        }
+
+        return output.toString();
     }
 
     // Main command handler.
@@ -538,7 +660,7 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
         giveWelcomeItems(player, true);
     }
 
-    // For saving the item in the player's hand to the loadout.
+    // Save the item in the player's hand to the loadout.
     private void handleSetCommand(CommandSender sender, String label, String[] args) {
         Player player = requirePlayer(sender);
 
@@ -567,7 +689,7 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
                 colorize(PREFIX + " &aSlot &e" + slot + " &aset to &e" + readableItemName(heldItem) + "&a."));
     }
 
-    // Remove a saved welcome item manually
+    // Remove a saved welcome item manually.
     private void handleRemoveCommand(CommandSender sender, String label, String[] args) {
         if (args.length != 2) {
             sender.sendMessage(colorize(PREFIX + " &cUsage: /" + label + " remove <1-9>"));
@@ -645,5 +767,4 @@ public final class PossumsWelcomeItems extends JavaPlugin implements Listener, T
 
         return matches;
     }
-
 }
